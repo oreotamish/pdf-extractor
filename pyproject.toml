@@ -1,0 +1,31 @@
+[tool.poetry]
+name = "pdf-extractor"
+version = "0.1.0"
+description = ""
+authors = ["oreotamish <sinhatamish@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+PyPDF2 = "^3.0.1"
+fastapi = "^0.111.0"
+uvicorn = "^0.29.0"
+pydantic = "^2.7.1"
+pyjwt = "^2.8.0"
+passlib = {extras = ["bcrypt"], version = "^1.7.4"}
+python-dotenv = "^1.0.1"
+sqlalchemy = "^2.0.30"
+python-jose = {extras = ["cryptography"], version = "^3.3.0"}
+python-multipart = "^0.0.9"
+fastapi-limiter = "^0.1.6"
+aioredis = "^2.0.1"
+setuptools = "^70.0.0"
+redis = "^5.0.4"
+aiofiles = "^23.2.1"
+filetype = "^1.2.0"
+apscheduler = "^3.10.4"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

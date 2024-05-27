@@ -1,0 +1,29 @@
+version: "2.3"
+
+services:
+  redis-server:
+    restart: always
+    image: redis:7.2.5
+    container_name: redis-server
+    command: /bin/bash -c 'redis-server --appendonly yes'
+    sysctls:
+      - net.core.somaxconn=128
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis:/data
+    mem_limit: 96m
+
+  fastapi:
+    build: .
+    image: pdf_extractor:latest
+    container_name: fastapi
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis-server
+    environment:
+      - REDIS_HOST=redis-server
+      - REDIS_PORT=6379
+      - SECRET_KEY=e59a16b3e5e90e1105ce43ae647e8b0ab17b8e7047ec7d6cdbf331efe470fabc
+      - ALGORITHM=HS256
