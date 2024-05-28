@@ -177,13 +177,20 @@ async def delete_pdf(user: user_dependency, db: db_dependency, file_name: str):
         os.remove(result.file_location)
         return {"info": f"{file_name} deleted"}
 
-@router.get('/text/{file_name}', status_code=status.HTTP_200_OK, dependencies=[Depends(RateLimiter(times=5, minutes=1))])
+@router.post('/text/{file_name}', status_code=status.HTTP_200_OK, dependencies=[Depends(RateLimiter(times=5, minutes=1))])
 async def parse_pdf_for_text(user: user_dependency, db: db_dependency, file_name: str):
     """
         Parse the PDF file for text and return the text and redis-key where it is stored.
     """
     sanitized_filename = file_name.replace(" ", "_").replace("-", "_").replace("/", "_").lower() 
-    file_path = db.query(Documents).filter_by(filename=sanitized_filename).first().file_location
+    file_path = db.query(Documents).filter_by(filename=sanitized_filename).first()
+    if file_path is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found"
+        )
+    else :
+        file_path = file_path.file_location
 
     if not os.path.exists(file_path):
         raise HTTPException(
