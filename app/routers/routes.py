@@ -4,6 +4,7 @@ from app.model.model import Documents
 from PyPDF2 import PdfReader
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from fastapi_limiter.depends import RateLimiter
 from typing import Annotated, IO
 from app.utils.auth import get_current_user, get_db
 import redis.asyncio as redis
@@ -30,8 +31,21 @@ os.makedirs(stored_dir, exist_ok=True)
 db_dependency = Annotated[Session, Depends(get_db)]
 user_dependency = Annotated[dict, Depends(get_current_user)]
 
-@router.post('/upload', status_code=status.HTTP_201_CREATED)
+@router.post('/upload', status_code=status.HTTP_201_CREATED, dependencies=[Depends(RateLimiter(times=5, minutes=1))])
 async def upload_pdf(user: user_dependency, db: db_dependency, file: UploadFile = File(...)):
+    """
+        Upload a PDF file to the server. This does not process the PDF for text. 
+
+    SCHEMA {
+        id = Column(Integer, primary_key=True, index=True)
+        filename = Column(String)
+        file_location = Column(String)
+        file_size = Column(Integer)
+        created_at = Column(DateTime)
+        user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'))
+        processed = Column(Boolean, default=0)
+    }
+    """
     validate_file_type(file.file)
     sanitized_filename = file.filename.replace(" ", "_").replace("-", "_").replace("/", "_").lower() 
     # check = db.query(Documents).filter(Documents.user_id == user['id'], Documents.filename == sanitized_filename).first()
@@ -102,8 +116,11 @@ def validate_file_type(file: IO):
             detail=f"Unsupported file type: {file_type.extension}",
         )
 
-@router.get('/', status_code=status.HTTP_200_OK)
+@router.get('/', status_code=status.HTTP_200_OK, dependencies=[Depends(RateLimiter(times=5, minutes=1))])
 async def get_all_pdfs(user: user_dependency):
+    """
+        Get list of all the PDFs uploaded by the user.
+    """
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -111,13 +128,15 @@ async def get_all_pdfs(user: user_dependency):
         )
     
     user_dir = os.path.join(stored_dir, f"{user['id']}_{user['username']}")
-    if '.DS_Store' in os.listdir(user_dir):
-        os.remove(os.path.join(user_dir, '.DS_Store'))
+    os.makedirs(user_dir, exist_ok=True)
     files = os.listdir(user_dir)
     return {"files": files}
 
-@router.get('/metadata/{file_name}', status_code=status.HTTP_200_OK)
+@router.get('/metadata/{file_name}', status_code=status.HTTP_200_OK, dependencies=[Depends(RateLimiter(times=5, minutes=1))])
 async def get_pdf_metadata(user: user_dependency, db: db_dependency, file_name: str):
+    """
+        Get metadata of a specific PDF file.
+    """
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -133,8 +152,11 @@ async def get_pdf_metadata(user: user_dependency, db: db_dependency, file_name: 
         )
     return {"metadata": result}
 
-@router.delete('/delete/{file_name}', status_code=status.HTTP_200_OK)
+@router.delete('/delete/{file_name}', status_code=status.HTTP_200_OK, dependencies=[Depends(RateLimiter(times=5, minutes=1))])
 async def delete_pdf(user: user_dependency, db: db_dependency, file_name: str):
+    """
+        Delete a specific PDF file.
+    """
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -155,25 +177,38 @@ async def delete_pdf(user: user_dependency, db: db_dependency, file_name: str):
         os.remove(result.file_location)
         return {"info": f"{file_name} deleted"}
 
-@router.get('/text/{file_name}', status_code=status.HTTP_200_OK)
+@router.get('/text/{file_name}', status_code=status.HTTP_200_OK, dependencies=[Depends(RateLimiter(times=5, minutes=1))])
 async def parse_pdf_for_text(user: user_dependency, db: db_dependency, file_name: str):
+    """
+        Parse the PDF file for text and return the text and redis-key where it is stored.
+    """
+    sanitized_filename = file_name.replace(" ", "_").replace("-", "_").replace("/", "_").lower() 
+    file_path = db.query(Documents).filter_by(filename=sanitized_filename).first().file_location
+
+    if not os.path.exists(file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found")
     return await parse_pdf(user, db, file_name)
 
-@router.get('/text-redis/{file_key}', status_code=status.HTTP_200_OK)
+@router.get('/text-redis/{file_key}', status_code=status.HTTP_200_OK, dependencies=[Depends(RateLimiter(times=5, minutes=1))])
 async def get_temporary_pdf_text_from_redis(user: user_dependency, file_key: str):
+    """
+        Get the text of the PDF file from redis using the redis-key.
+    """
     file_key_parts = file_key.split(":")
     if int(file_key_parts[1]) != user['id']:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated for this redis key user_id"
         )
-    result = await redis.get(file_key)
-    ttl = await redis.ttl(file_key)
+    result = await redis_client.get(file_key)
+    ttl = await redis_client.ttl(file_key)
 
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="File not found"
+            detail="Key not found"
         )
     text = json.loads(result)['text']
     return {"ttl": f"{ttl} Seconds Left", "text": text}

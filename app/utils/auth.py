@@ -53,6 +53,9 @@ def create_user(request: CreateUserRequest, db: db_dependency):
 @router.post("/token", response_model=Token)
 async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
                                  db: db_dependency):
+    """
+    Get a token for the user
+    """
     user = authenticate_user(form_data.username, form_data.password, db)
     if not user:
         raise HTTPException(
@@ -67,6 +70,9 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
     }
 
 def authenticate_user(username: str, password: str, db: Session):
+    """
+    Authenticate the user
+    """
     user = db.query(Users).filter(Users.username == username).first()
     if not user:
         return False

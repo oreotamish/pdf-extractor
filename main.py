@@ -48,6 +48,9 @@ user_dependency = Annotated[dict, Depends(get_current_user)]
 @app.get("/", status_code=status.HTTP_200_OK,
          dependencies=[Depends(RateLimiter(times=5, minutes=1))])
 async def health_check(user: user_dependency, db: db_dependency):
+    """
+    Health check endpoint
+    """
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -57,4 +60,8 @@ async def health_check(user: user_dependency, db: db_dependency):
 
 @app.post("/webhook", status_code=status.HTTP_200_OK)
 async def handle_event_webhook(body: dict):
+    """
+    Handle incoming webhook events.
+    Only for `Upload` and `Processing`.
+    """
     return body

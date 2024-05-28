@@ -30,6 +30,7 @@ async def parse_pdf(user: user_dependency, db: db_dependency, file_name: str):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="File not found"
         )
+    
 
     with open(file_path, 'rb') as file:
         pdf = PdfReader(file)
@@ -39,7 +40,7 @@ async def parse_pdf(user: user_dependency, db: db_dependency, file_name: str):
                 result["text"][index] = page_text.split('\n')
     
     file_key = f"PDF:{user['id']}:{sanitized_filename}"
-    await redis.setex(file_key, 600, json.dumps(result))  # 10 minutes
+    await redis_client.setex(file_key, 600, json.dumps(result))  # 10 minutes
     if user["id"] == "CRON":
         result["redis-key"] = file_key
         os.makedirs(f"{stored_dir}/CRON", exist_ok=True)
